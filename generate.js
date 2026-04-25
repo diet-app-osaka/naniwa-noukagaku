@@ -7,6 +7,43 @@ const Jimp = require('jimp');
 const API_KEY = process.env.STABILITY_API_KEY;
 const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzvPyTQIKrGke7_lse8Hyu24KZF7XG36aTx6c89RTiVQ75TzeKknK0NUXBtj9i32y4biQ/exec";
 
+const THEMES = [
+    "天空の占星術塔: 巨大な天球儀と星図、動く望遠鏡がある。",
+    "氷の魔術師の書斎: 家具がすべて氷でできており、冷たい霧が漂う。",
+    "砂漠の遺跡キャンプ: 古代の石碑を解読するためのテント。",
+    "ドラゴンの巣の鑑定所: 財宝と巨大な骨に囲まれた鑑定士の作業場。",
+    "陰陽師の結界部屋: 浮遊する御札と大きな筆、墨の香りが漂う空間。",
+    "中世の写本室: ろうそくの火が揺れる中、羊皮紙に緻密な絵を描く部屋。",
+    "巨人の台所: すべてが巨大な、巨大生物のための調理場兼実験場。",
+    "魔女のハーブ乾燥室: 天井から数千の乾燥植物が吊るされた部屋。",
+    "地下墓地の祭壇: 骸骨と紫の炎、不気味な儀式道具が並ぶ場所。",
+    "飛行船の操縦室: 雲の上を飛ぶ船の、真鍮と革張りのコックピット。",
+    "錬金術師の地下貯蔵庫: 液体が脈動する巨大なフラスコが並ぶ。",
+    "アトランティスの神殿: 沈没した都市にある、光るクリスタルの動力源。",
+    "ノームの時計修理工房: 小さな歯車が壁一面に敷き詰められた部屋。",
+    "鏡の魔術師の部屋: 無数の合わせ鏡があり、別の世界が映っている。",
+    "妖精の鍛冶場: 蛍の光で照らされた、花びらで作られた金槌がある場所。",
+    "バビロンの空中庭園ラボ: 垂直に流れる水と珍しい熱帯植物の研究室。",
+    "忍者のからくり屋敷: 壁が回転し、隠し武器が仕込まれた訓練場。",
+    "廃墟のハッカーアジト: 瓦礫の中に古いモニターと配線が散乱している。",
+    "アンドロイド修復工場: 吊り下げられた機械の腕と、解体された義体。",
+    "衛星軌道上の展望ラウンジ: 地球を眼下に見下ろすガラス張りの部屋。",
+    "スペースデブリの回収船: 宇宙のゴミを分解する、無骨なクレーンのある部屋。",
+    "クローン培養センター: 緑色の液体の中に浮かぶ生命体のカプセル。",
+    "ネオ東京の屋台裏: 濡れたアスファルトとホログラム看板の光。",
+    "巨大キノコの村の診療所: キノコの傘の下にある、胞子が舞う薬局。",
+    "深海の人魚の宮殿: 珊瑚の椅子と、真珠の照明がある部屋。",
+    "樹齢千年の樹内図書館: 木の幹の中に彫られた、本棚と木の階段。",
+    "滝の裏の隠れ家: 水のカーテン越しに光が差し込む石室。 ",
+    "おもちゃの病院: 壊れたぬいぐるみが手術を待っている工房。",
+    "昭和の秘密基地: 段ボールの壁、漫画、古いラジオ。",
+    "ジャズの流れる深夜のバー: 琥珀色のグラスと、レコードプレーヤー。",
+    "お菓子の城のパティスリー: チョコのレンガと、キャンディの窓。",
+    "猫が経営するティーサロン: 猫用の小さな家具と、肉球クッキー。",
+    "重力が逆転した部屋: 天井に家具が配置され、床が空。",
+    "香水調合師のラボ: 数千のガラス瓶と、目に見える香りの霧。"
+];
+
 if (!API_KEY) {
     console.error("STABILITY_API_KEY is not set in .env file.");
     process.exit(1);
@@ -73,14 +110,18 @@ function getRandomRegions(imgWidth, imgHeight, count, difficulty) {
 
 async function generateImages(difficulty, levelName) {
     console.log(`\n=== 難易度: ${levelName} の生成を開始 ===`);
-    const prefix = `level_${difficulty}`;
+    const timestamp = new Date().getTime();
+    const prefix = `level_${difficulty}_${timestamp}`;
     
     // 1. ベース画像の生成
     console.log("[1/4] ベース画像を生成中...");
+    const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
+    console.log(`      -> 選ばれたテーマ: ${theme}`);
+
     const baseRes = await axios.post(
         'https://api.stability.ai/v2beta/stable-image/generate/core',
         axios.toFormData({
-            prompt: "A highly detailed, colorful, isometric illustration of a quirky brain science laboratory desk. Stacks of books, a glowing brain in a glass jar, a microscope, a vintage clock, and scattered notes. Bright lighting, engaging and fun atmosphere, perfect for a spot-the-difference puzzle game.",
+            prompt: `A highly detailed, colorful, isometric illustration of ${theme}. Engaging and fun atmosphere, perfect for a spot-the-difference puzzle game. High resolution, 3d style.`,
             output_format: "png"
         }),
         {
@@ -169,9 +210,7 @@ async function generateImages(difficulty, levelName) {
 async function run() {
     try {
         await generateImages(1, "初級");
-        await generateImages(2, "中級");
-        // テストのためまずは初級・中級のみ（API節約）
-        console.log("\n全ての生成が完了しました！");
+        console.log("\nテスト生成が完了しました！");
     } catch (err) {
         if(err.response) {
             console.error("API Error:", err.response.status, err.response.data.toString());
