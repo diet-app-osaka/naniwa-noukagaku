@@ -1,0 +1,30 @@
+name: Generate Naniwa Noukagaku Images
+
+on:
+  schedule:
+    # 毎日 日本時間(JST)の 7:00, 12:00, 19:00 に実行
+    # UTCでは -9時間 -> 22:00, 03:00, 10:00
+    - cron: '0 22 * * *'
+    - cron: '0 3 * * *'
+    - cron: '0 10 * * *'
+  workflow_dispatch: # 手動実行（テスト用）
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm install
+        
+      - name: Run generation script
+        env:
+          STABILITY_API_KEY: ${{ secrets.STABILITY_API_KEY }}
+        run: node generate.js
