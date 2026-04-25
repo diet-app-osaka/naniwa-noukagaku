@@ -181,7 +181,7 @@ async function generateImages(difficulty, levelName) {
     console.log("[4/4] 答え合わせ画像を生成中...");
     const answerImg = await Jimp.read(basePath);
     const colorRed = Jimp.rgbaToInt(255, 0, 0, 255);
-    const thickness = Math.max(3, Math.floor(width * 0.005)); // 解像度に応じた太さ
+    const thickness = Math.max(8, Math.floor(width * 0.01)); // 太さを従来の約2倍にアップグレード
 
     for(const [rx, ry, rw, rh] of regions) {
         const cx = rx + rw / 2;
