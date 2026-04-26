@@ -202,8 +202,7 @@ async function generateImages(difficulty, levelName) {
             }
         }
     }
-    // 強力にぼかして形を消す
-    maskImg.blur(15);
+    // ※AIに送るマスクをぼかすと、グレー部分を「黒い影を描く指示」と誤認するため、ぼかしは入れない
     const maskPath = `${prefix}_mask.png`;
     await maskImg.writeAsync(maskPath);
 
@@ -211,8 +210,10 @@ async function generateImages(difficulty, levelName) {
     const inpaintData = new FormData();
     inpaintData.append('image', fs.createReadStream(basePath));
     inpaintData.append('mask', fs.createReadStream(maskPath));
-    // 形状へのこだわりを捨てさせ、絵としての自然さを最優先させるプロンプト
-    inpaintData.append('prompt', "A natural modification of the illustration. Change a small object or detail. Matches the art style perfectly. NO solid circles, NO solid squares, NO artificial shapes. Seamless textures only.");
+    // プロンプトから否定語（NO 〜）を外す（AIが勘違いして描いてしまうため）。代わりに自然な変更を指示。
+    inpaintData.append('prompt', "A natural modification of the illustration. Add, remove, or change a small object or detail. Seamlessly blend with the environment. High quality, matching art style.");
+    // 描いてほしくないものは negative_prompt に指定する
+    inpaintData.append('negative_prompt', "black blobs, dark circles, simple shapes, blurry, artificial shapes, artifacts, weird shadows, unpainted areas");
     inpaintData.append('output_format', 'png');
 
     const inpaintRes = await axios.post(
@@ -326,8 +327,8 @@ async function generateImages(difficulty, levelName) {
 
 async function run() {
     try {
-        // 各レベルを2セットずつ生成
-        for (let i = 1; i <= 2; i++) {
+        // テスト・クレジット消費を抑えるため、まずは1セットのみ生成
+        for (let i = 1; i <= 1; i++) {
             console.log(`\n--- 第 ${i} セットの生成開始 ---`);
             await generateImages(1, "初級");
             await generateImages(2, "中級");
