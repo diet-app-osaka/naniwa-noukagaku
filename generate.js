@@ -53,11 +53,15 @@ if (!API_KEY) {
 async function uploadToDrive(filePath, filename) {
     console.log(`      [Format] Instagram用に1080x1080の白枠を追加中...`);
     
-    // 画像を1000x1000に縮小し、1080x1080の白キャンバスの中央に配置
+    // 画像の縦横比（アスペクト比）を維持したまま、最大辺が1000pxになるように縮小
     const img = await Jimp.read(filePath);
-    img.resize(1000, 1000);
+    img.scaleToFit(1000, 1000);
+    
+    // 1080x1080の白キャンバスを作成し、計算した中央位置に画像を配置
     const canvas = new Jimp(1080, 1080, 0xFFFFFFFF);
-    canvas.composite(img, 40, 40);
+    const x = Math.floor((1080 - img.bitmap.width) / 2);
+    const y = Math.floor((1080 - img.bitmap.height) / 2);
+    canvas.composite(img, x, y);
     
     const formattedPath = filePath.replace('.png', '_ig.png');
     await canvas.writeAsync(formattedPath);
