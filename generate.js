@@ -36,7 +36,7 @@ const THEMES = [
     "樹齢千年の樹内図書館: 木の幹の中に彫られた、本棚と木の階段。",
     "滝の裏の隠れ家: 水のカーテン越しに光が差し込む石室。 ",
     "おもちゃの病院: 壊れたぬいぐるみが手術を待っている工房。",
-    "昭和の秘密基地: 段ボールの壁、漫画、古いラジオ。",
+    "昭和の秘密基地: 段ボールの壁, 漫画, 古いラジオ。",
     "ジャズの流れる深夜のバー: 琥珀色のグラスと、レコードプレーヤー。",
     "お菓子の城のパティスリー: チョコのレンガと、キャンディの窓。",
     "猫が経営するティーサロン: 猫用の小さな家具と、肉球クッキー。",
@@ -73,9 +73,9 @@ async function uploadToDrive(filePath, filename) {
 function getRandomRegions(imgWidth, imgHeight, count, difficulty) {
     const regions = [];
     let sizeRatio;
-    if (difficulty === 1) sizeRatio = 0.08; 
-    else if (difficulty === 2) sizeRatio = 0.05; 
-    else sizeRatio = 0.03; 
+    if (difficulty === 1) sizeRatio = 0.06; // さらに小さくして精度アップ
+    else if (difficulty === 2) sizeRatio = 0.04; 
+    else sizeRatio = 0.025; 
 
     const baseSize = Math.floor(Math.min(imgWidth, imgHeight) * sizeRatio);
     let attempts = 0;
@@ -90,7 +90,7 @@ function getRandomRegions(imgWidth, imgHeight, count, difficulty) {
 
         let overlap = false;
         for (const r of regions) {
-            const padding = baseSize;
+            const padding = baseSize * 1.5;
             if (x - padding < r[0] + r[2] && x + w + padding > r[0] && 
                 y - padding < r[1] + r[3] && y + h + padding > r[1]) {
                 overlap = true;
@@ -147,7 +147,7 @@ async function generateImages(difficulty, levelName) {
 
     await uploadToDrive(basePath, `${levelLabel}_${timestamp}_base.png`);
 
-    // 2. マスクの生成 (円形にしてぼかす)
+    // 2. マスクの生成 (ガタガタの形状にして強力にぼかす)
     console.log(`[2/4] マスク画像を生成中（間違いの数: ${count}）...`);
     const maskImg = new Jimp(width, height, 0x000000FF);
     const regions = getRandomRegions(width, height, count, difficulty);
@@ -158,10 +158,12 @@ async function generateImages(difficulty, levelName) {
         const cy = ry + rh / 2;
         const radius = Math.max(rw, rh) / 2;
         
-        for(let x = Math.floor(cx - radius); x <= Math.ceil(cx + radius); x++) {
-            for(let y = Math.floor(cy - radius); y <= Math.ceil(cy + radius); y++) {
+        for(let x = Math.floor(cx - radius * 1.2); x <= Math.ceil(cx + radius * 1.2); x++) {
+            for(let y = Math.floor(cy - radius * 1.2); y <= Math.ceil(cy + radius * 1.2); y++) {
+                // ランダムなノイズを加えて形を歪ませる
+                const noise = Math.random() * 0.3;
                 const dist = Math.sqrt((x-cx)*(x-cx) + (y-cy)*(y-cy));
-                if(dist <= radius) {
+                if(dist <= radius * (1 + noise)) {
                     if(x >= 0 && x < width && y >= 0 && y < height) {
                         maskImg.setPixelColor(colorWhite, x, y);
                     }
@@ -169,8 +171,8 @@ async function generateImages(difficulty, levelName) {
             }
         }
     }
-    // マスクを少しぼかして境界を自然にする
-    maskImg.blur(5);
+    // 強力にぼかして形を消す
+    maskImg.blur(15);
     const maskPath = `${prefix}_mask.png`;
     await maskImg.writeAsync(maskPath);
 
@@ -178,7 +180,8 @@ async function generateImages(difficulty, levelName) {
     const inpaintData = new FormData();
     inpaintData.append('image', fs.createReadStream(basePath));
     inpaintData.append('mask', fs.createReadStream(maskPath));
-    inpaintData.append('prompt', "A seamless modification of the illustration, matching the 2D flat cartoon style and colors perfectly. Change the object slightly, or change its color, or remove it, but blend it in naturally without any blocks or artifacts.");
+    // 形状へのこだわりを捨てさせ、絵としての自然さを最優先させるプロンプト
+    inpaintData.append('prompt', "A natural modification of the illustration. Change a small object or detail. Matches the art style perfectly. NO solid circles, NO solid squares, NO artificial shapes. Seamless textures only.");
     inpaintData.append('output_format', 'png');
 
     const inpaintRes = await axios.post(
