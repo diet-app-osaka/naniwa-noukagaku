@@ -226,10 +226,14 @@ async function generateImages(difficulty, levelName) {
 
 async function run() {
     try {
-        await generateImages(1, "初級");
-        await generateImages(2, "中級");
-        await generateImages(3, "上級");
-        console.log("\n全ての生成が完了しました！");
+        // 各レベルを2セットずつ生成
+        for (let i = 1; i <= 2; i++) {
+            console.log(`\n--- 第 ${i} セットの生成開始 ---`);
+            await generateImages(1, "初級");
+            await generateImages(2, "中級");
+            await generateImages(3, "上級");
+        }
+        console.log("\n本日の全ての生成が完了しました！");
     } catch (err) {
         if(err.response) {
             console.error("API Error:", err.response.status, err.response.data.toString());
