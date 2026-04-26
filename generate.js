@@ -49,11 +49,22 @@ if (!API_KEY) {
     process.exit(1);
 }
 
-// Googleドライブへのアップロード関数
+// Googleドライブへのアップロード関数 (1080x1080 インスタ用に白枠を追加)
 async function uploadToDrive(filePath, filename) {
+    console.log(`      [Format] Instagram用に1080x1080の白枠を追加中...`);
+    
+    // 画像を1000x1000に縮小し、1080x1080の白キャンバスの中央に配置
+    const img = await Jimp.read(filePath);
+    img.resize(1000, 1000);
+    const canvas = new Jimp(1080, 1080, 0xFFFFFFFF);
+    canvas.composite(img, 40, 40);
+    
+    const formattedPath = filePath.replace('.png', '_ig.png');
+    await canvas.writeAsync(formattedPath);
+
     console.log(`      [Drive] ${filename} をアップロード中...`);
     try {
-        const base64 = fs.readFileSync(filePath, {encoding: 'base64'});
+        const base64 = fs.readFileSync(formattedPath, {encoding: 'base64'});
         const res = await axios.post(GAS_WEB_APP_URL, {
             filename: filename,
             base64: base64
@@ -67,6 +78,11 @@ async function uploadToDrive(filePath, filename) {
         }
     } catch(err) {
         console.error(`      -> アップロードエラー:`, err.message);
+    }
+    
+    // アップロード用の一時ファイルを削除
+    if (fs.existsSync(formattedPath)) {
+        fs.unlinkSync(formattedPath);
     }
 }
 
