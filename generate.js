@@ -70,14 +70,12 @@ async function uploadToDrive(filePath, filename) {
     }
 }
 
-// 難易度別の設定
-// difficulty: 1 (初級), 2 (中級), 3 (上級)
 function getRandomRegions(imgWidth, imgHeight, count, difficulty) {
     const regions = [];
     let sizeRatio;
-    if (difficulty === 1) sizeRatio = 0.08; // 初級：サイズを縮小（ピンポイント化）
-    else if (difficulty === 2) sizeRatio = 0.05; // 中級
-    else sizeRatio = 0.03; // 上級
+    if (difficulty === 1) sizeRatio = 0.08; 
+    else if (difficulty === 2) sizeRatio = 0.05; 
+    else sizeRatio = 0.03; 
 
     const baseSize = Math.floor(Math.min(imgWidth, imgHeight) * sizeRatio);
     let attempts = 0;
@@ -86,14 +84,12 @@ function getRandomRegions(imgWidth, imgHeight, count, difficulty) {
         attempts++;
         const w = Math.floor(baseSize * (0.8 + Math.random() * 0.4));
         const h = Math.floor(baseSize * (0.8 + Math.random() * 0.4));
-        // マージンを少し取る
         const margin = Math.floor(baseSize * 0.5);
         const x = Math.floor(margin + Math.random() * (imgWidth - w - margin * 2));
         const y = Math.floor(margin + Math.random() * (imgHeight - h - margin * 2));
 
         let overlap = false;
         for (const r of regions) {
-            // かなり余裕を持たせて被り判定
             const padding = baseSize;
             if (x - padding < r[0] + r[2] && x + w + padding > r[0] && 
                 y - padding < r[1] + r[3] && y + h + padding > r[1]) {
@@ -113,13 +109,23 @@ async function generateImages(difficulty, levelName) {
     const timestamp = new Date().getTime();
     const prefix = `level_${difficulty}_${timestamp}`;
     
-    // 難易度に応じて間違いの数を変える
     let count;
-    if (difficulty === 1) count = 3 + Math.floor(Math.random() * 3); // 初級: 3〜5個
-    else if (difficulty === 2) count = 6 + Math.floor(Math.random() * 3); // 中級: 6〜8個
-    else count = 10 + Math.floor(Math.random() * 3); // 上級: 10〜12個
+    let levelLabel;
+    let badgePath;
+    if (difficulty === 1) {
+        count = 3 + Math.floor(Math.random() * 3);
+        levelLabel = "【初級】";
+        badgePath = "badges/beginner.png";
+    } else if (difficulty === 2) {
+        count = 6 + Math.floor(Math.random() * 3);
+        levelLabel = "【中級】";
+        badgePath = "badges/intermediate.png";
+    } else {
+        count = 10 + Math.floor(Math.random() * 3);
+        levelLabel = "【上級】";
+        badgePath = "badges/advanced.png";
+    }
     
-    // 1. ベース画像の生成
     console.log("[1/4] ベース画像を生成中...");
     const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
     console.log(`      -> 選ばれたテーマ: ${theme}`);
@@ -136,16 +142,26 @@ async function generateImages(difficulty, levelName) {
         }
     );
     const basePath = `${prefix}_base.png`;
-    fs.writeFileSync(basePath, baseRes.data);
-    await uploadToDrive(basePath, basePath);
+    fs.writeFileSync(basePath, Buffer.from(baseRes.data));
     
-    // 画像サイズを取得
     const baseImg = await Jimp.read(basePath);
     const width = baseImg.bitmap.width;
     const height = baseImg.bitmap.height;
     console.log(`      -> 生成完了: ${width}x${height}`);
 
-    // 2. マスクの生成 (難易度に応じた数)
+    try {
+        const badge = await Jimp.read(badgePath);
+        const badgeSize = Math.floor(width * 0.25);
+        badge.resize(badgeSize, Jimp.AUTO);
+        baseImg.composite(badge, width - badge.bitmap.width, 0);
+        await baseImg.writeAsync(basePath);
+        console.log("      -> 難易度バッジを合成しました");
+    } catch (e) {
+        console.log("      -> バッジの合成に失敗しました（スキップします）");
+    }
+
+    await uploadToDrive(basePath, `${levelLabel}_${timestamp}_base.png`);
+
     console.log(`[2/4] マスク画像を生成中（間違いの数: ${count}）...`);
     const maskImg = new Jimp(width, height, 0x000000FF);
     const regions = getRandomRegions(width, height, count, difficulty);
@@ -163,7 +179,6 @@ async function generateImages(difficulty, levelName) {
     const maskPath = `${prefix}_mask.png`;
     await maskImg.writeAsync(maskPath);
 
-    // 3. インペイント（間違いの作成）
     console.log("[3/4] 間違い画像を生成中（インペイント）...");
     const inpaintData = new FormData();
     inpaintData.append('image', fs.createReadStream(basePath));
@@ -180,19 +195,17 @@ async function generateImages(difficulty, levelName) {
         }
     );
     const mistakePath = `${prefix}_mistake.png`;
-    fs.writeFileSync(mistakePath, inpaintRes.data);
-    await uploadToDrive(mistakePath, mistakePath);
+    fs.writeFileSync(mistakePath, Buffer.from(inpaintRes.data));
+    await uploadToDrive(mistakePath, `${levelLabel}_${timestamp}_mistake.png`);
 
-    // 4. 赤丸の描画（答え合わせ画像）
     console.log("[4/4] 答え合わせ画像を生成中...");
     const answerImg = await Jimp.read(basePath);
     const colorRed = Jimp.rgbaToInt(255, 0, 0, 255);
-    const thickness = Math.max(8, Math.floor(width * 0.01)); // 太さを従来の約2倍にアップグレード
+    const thickness = Math.max(8, Math.floor(width * 0.01));
 
     for(const [rx, ry, rw, rh] of regions) {
         const cx = rx + rw / 2;
         const cy = ry + rh / 2;
-        // マスクより少し大きめの円を描く
         const radius = Math.max(rw, rh) / 2 + (width * 0.02);
 
         for(let x = cx - radius - thickness; x <= cx + radius + thickness; x++) {
@@ -208,7 +221,7 @@ async function generateImages(difficulty, levelName) {
     }
     const answerPath = `${prefix}_answer.png`;
     await answerImg.writeAsync(answerPath);
-    await uploadToDrive(answerPath, answerPath);
+    await uploadToDrive(answerPath, `${levelLabel}_${timestamp}_answer.png`);
     
     console.log(`-> ${levelName} の作成とアップロード完了！`);
 }
