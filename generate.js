@@ -14,7 +14,7 @@ const THEMES = [
     "ドラゴンの巣の鑑定所: 財宝と巨大な骨に囲まれた鑑定士の作業場。",
     "陰陽師の結界部屋: 浮遊する御札と大きな筆、墨の香りが漂う空間。",
     "中世の写本室: ろうそくの火が揺れる中、羊皮紙に緻密な絵を描く部屋。",
-    "巨人の台所: すべてが巨大な、巨大生物のための調理場兼実験場。",
+    "巨人の台所: すべてが巨大な, 巨大生物のための調理場兼実験場。",
     "魔女のハーブ乾燥室: 天井から数千の乾燥植物が吊るされた部屋。",
     "地下墓地の祭壇: 骸骨と紫の炎、不気味な儀式道具が並ぶ場所。",
     "飛行船の操縦室: 雲の上を飛ぶ船の、真鍮と革張りのコックピット。",
@@ -147,20 +147,30 @@ async function generateImages(difficulty, levelName) {
 
     await uploadToDrive(basePath, `${levelLabel}_${timestamp}_base.png`);
 
+    // 2. マスクの生成 (円形にしてぼかす)
     console.log(`[2/4] マスク画像を生成中（間違いの数: ${count}）...`);
     const maskImg = new Jimp(width, height, 0x000000FF);
     const regions = getRandomRegions(width, height, count, difficulty);
     const colorWhite = Jimp.rgbaToInt(255, 255, 255, 255);
     
     for(const [rx, ry, rw, rh] of regions) {
-        for(let x = rx; x < rx + rw; x++) {
-            for(let y = ry; y < ry + rh; y++) {
-                if(x >= 0 && x < width && y >= 0 && y < height) {
-                    maskImg.setPixelColor(colorWhite, x, y);
+        const cx = rx + rw / 2;
+        const cy = ry + rh / 2;
+        const radius = Math.max(rw, rh) / 2;
+        
+        for(let x = Math.floor(cx - radius); x <= Math.ceil(cx + radius); x++) {
+            for(let y = Math.floor(cy - radius); y <= Math.ceil(cy + radius); y++) {
+                const dist = Math.sqrt((x-cx)*(x-cx) + (y-cy)*(y-cy));
+                if(dist <= radius) {
+                    if(x >= 0 && x < width && y >= 0 && y < height) {
+                        maskImg.setPixelColor(colorWhite, x, y);
+                    }
                 }
             }
         }
     }
+    // マスクを少しぼかして境界を自然にする
+    maskImg.blur(5);
     const maskPath = `${prefix}_mask.png`;
     await maskImg.writeAsync(maskPath);
 
@@ -168,7 +178,7 @@ async function generateImages(difficulty, levelName) {
     const inpaintData = new FormData();
     inpaintData.append('image', fs.createReadStream(basePath));
     inpaintData.append('mask', fs.createReadStream(maskPath));
-    inpaintData.append('prompt', "a small detail changed, color swap, missing small object, different facial expression, simple modification, clean 2D style");
+    inpaintData.append('prompt', "A seamless modification of the illustration, matching the 2D flat cartoon style and colors perfectly. Change the object slightly, or change its color, or remove it, but blend it in naturally without any blocks or artifacts.");
     inpaintData.append('output_format', 'png');
 
     const inpaintRes = await axios.post(
