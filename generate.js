@@ -264,7 +264,6 @@ async function generateImages(difficulty, levelName) {
     // ★完璧な間違い画像を生成する（有効な領域だけを元の画像に合成する）
     const finalMistakeImg = baseImg.clone();
     const validMask = new Jimp(width, height, 0x000000FF);
-    const colorWhite = Jimp.rgbaToInt(255, 255, 255, 255);
     for(const [rx, ry, rw, rh] of validRegions) {
         const cx = rx + rw / 2;
         const cy = ry + rh / 2;
