@@ -113,6 +113,12 @@ async function generateImages(difficulty, levelName) {
     const timestamp = new Date().getTime();
     const prefix = `level_${difficulty}_${timestamp}`;
     
+    // 難易度に応じて間違いの数を変える
+    let count;
+    if (difficulty === 1) count = 3 + Math.floor(Math.random() * 3); // 初級: 3〜5個
+    else if (difficulty === 2) count = 6 + Math.floor(Math.random() * 3); // 中級: 6〜8個
+    else count = 10 + Math.floor(Math.random() * 3); // 上級: 10〜12個
+    
     // 1. ベース画像の生成
     console.log("[1/4] ベース画像を生成中...");
     const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
@@ -139,10 +145,10 @@ async function generateImages(difficulty, levelName) {
     const height = baseImg.bitmap.height;
     console.log(`      -> 生成完了: ${width}x${height}`);
 
-    // 2. マスクの生成 (8箇所)
-    console.log("[2/4] マスク画像を生成中...");
+    // 2. マスクの生成 (難易度に応じた数)
+    console.log(`[2/4] マスク画像を生成中（間違いの数: ${count}）...`);
     const maskImg = new Jimp(width, height, 0x000000FF);
-    const regions = getRandomRegions(width, height, 8, difficulty);
+    const regions = getRandomRegions(width, height, count, difficulty);
     const colorWhite = Jimp.rgbaToInt(255, 255, 255, 255);
     
     for(const [rx, ry, rw, rh] of regions) {
@@ -210,7 +216,9 @@ async function generateImages(difficulty, levelName) {
 async function run() {
     try {
         await generateImages(1, "初級");
-        console.log("\nテスト生成が完了しました！");
+        await generateImages(2, "中級");
+        await generateImages(3, "上級");
+        console.log("\n全ての生成が完了しました！");
     } catch (err) {
         if(err.response) {
             console.error("API Error:", err.response.status, err.response.data.toString());
