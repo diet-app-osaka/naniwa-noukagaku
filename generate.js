@@ -194,14 +194,47 @@ async function generateImages(difficulty, levelName) {
     );
     const mistakePath = `${prefix}_mistake.png`;
     fs.writeFileSync(mistakePath, Buffer.from(inpaintRes.data));
-    await uploadToDrive(mistakePath, `${levelLabel}_${timestamp}_mistake.png`);
 
-    console.log("[4/4] 答え合わせ画像を生成中...");
+    console.log("[4/4] 曖昧な間違いの除外と答え合わせ画像を生成中...");
+    const mistakeImg = await Jimp.read(mistakePath);
     const answerImg = await Jimp.read(basePath);
     const colorRed = Jimp.rgbaToInt(255, 0, 0, 255);
     const thickness = Math.max(8, Math.floor(width * 0.01));
 
+    const validRegions = [];
     for(const [rx, ry, rw, rh] of regions) {
+        let diffSum = 0;
+        for(let x = rx; x < rx + rw; x++) {
+            for(let y = ry; y < ry + rh; y++) {
+                if (x >= width || y >= height) continue;
+                const c1 = Jimp.intToRGBA(baseImg.getPixelColor(x, y));
+                const c2 = Jimp.intToRGBA(mistakeImg.getPixelColor(x, y));
+                diffSum += Math.abs(c1.r - c2.r) + Math.abs(c1.g - c2.g) + Math.abs(c1.b - c2.b);
+            }
+        }
+        const avgDiff = diffSum / (rw * rh * 3);
+        console.log(`      -> 領域(${rx},${ry}) の変化量: ${avgDiff.toFixed(2)}`);
+        
+        // 閾値（15）未満の場合は、変化が小さすぎるとみなして弾く
+        if (avgDiff > 15) {
+            validRegions.push([rx, ry, rw, rh]);
+        } else {
+            console.log(`      -> [除外] 変化が小さいため、元の画像を貼り直して完全に同一にします。`);
+            mistakeImg.blit(baseImg, rx, ry, rx, ry, rw, rh);
+        }
+    }
+
+    if (validRegions.length === 0) {
+        console.log("      -> [エラー] 有効な間違いが1つも生成されませんでした。このセットはスキップします。");
+        return;
+    }
+
+    // クリーンになった間違い画像を保存＆アップロード
+    await mistakeImg.writeAsync(mistakePath);
+    await uploadToDrive(mistakePath, `${levelLabel}_${timestamp}_mistake.png`);
+
+    // 答え合わせ画像には、弾かれなかった「明確な間違い」のみ赤丸をつける
+    for(const [rx, ry, rw, rh] of validRegions) {
         const cx = rx + rw / 2;
         const cy = ry + rh / 2;
         const radius = Math.max(rw, rh) / 2 + (width * 0.02);
@@ -221,7 +254,7 @@ async function generateImages(difficulty, levelName) {
     await answerImg.writeAsync(answerPath);
     await uploadToDrive(answerPath, `${levelLabel}_${timestamp}_answer.png`);
     
-    console.log(`-> ${levelName} の作成とアップロード完了！`);
+    console.log(`-> ${levelName} の作成とアップロード完了！ (実際の間違い数: ${validRegions.length})`);
 }
 
 async function run() {
