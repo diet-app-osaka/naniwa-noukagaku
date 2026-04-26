@@ -111,19 +111,15 @@ async function generateImages(difficulty, levelName) {
     
     let count;
     let levelLabel;
-    let badgePath;
     if (difficulty === 1) {
         count = 3 + Math.floor(Math.random() * 3);
         levelLabel = "【初級】";
-        badgePath = "badges/beginner.png";
     } else if (difficulty === 2) {
         count = 6 + Math.floor(Math.random() * 3);
         levelLabel = "【中級】";
-        badgePath = "badges/intermediate.png";
     } else {
         count = 10 + Math.floor(Math.random() * 3);
         levelLabel = "【上級】";
-        badgePath = "badges/advanced.png";
     }
     
     console.log("[1/4] ベース画像を生成中...");
@@ -148,17 +144,6 @@ async function generateImages(difficulty, levelName) {
     const width = baseImg.bitmap.width;
     const height = baseImg.bitmap.height;
     console.log(`      -> 生成完了: ${width}x${height}`);
-
-    try {
-        const badge = await Jimp.read(badgePath);
-        const badgeSize = Math.floor(width * 0.25);
-        badge.resize(badgeSize, Jimp.AUTO);
-        baseImg.composite(badge, width - badge.bitmap.width, 0);
-        await baseImg.writeAsync(basePath);
-        console.log("      -> 難易度バッジを合成しました");
-    } catch (e) {
-        console.log("      -> バッジの合成に失敗しました（スキップします）");
-    }
 
     await uploadToDrive(basePath, `${levelLabel}_${timestamp}_base.png`);
 
