@@ -75,9 +75,9 @@ async function uploadToDrive(filePath, filename) {
 function getRandomRegions(imgWidth, imgHeight, count, difficulty) {
     const regions = [];
     let sizeRatio;
-    if (difficulty === 1) sizeRatio = 0.15; // 初級：画像の15%程度の大きさ
-    else if (difficulty === 2) sizeRatio = 0.08; // 中級：画像の8%程度の大きさ
-    else sizeRatio = 0.04; // 上級：画像の4%程度の大きさ
+    if (difficulty === 1) sizeRatio = 0.08; // 初級：サイズを縮小（ピンポイント化）
+    else if (difficulty === 2) sizeRatio = 0.05; // 中級
+    else sizeRatio = 0.03; // 上級
 
     const baseSize = Math.floor(Math.min(imgWidth, imgHeight) * sizeRatio);
     let attempts = 0;
@@ -121,7 +121,7 @@ async function generateImages(difficulty, levelName) {
     const baseRes = await axios.post(
         'https://api.stability.ai/v2beta/stable-image/generate/core',
         axios.toFormData({
-            prompt: `A highly detailed, colorful, isometric illustration of ${theme}. Engaging and fun atmosphere, perfect for a spot-the-difference puzzle game. High resolution, 3d style.`,
+            prompt: `A simple 2D flat illustration of ${theme}. Kawaii cartoon style, bold black outlines, bright solid colors, clear and simple composition, white background, high contrast, children's book style.`,
             output_format: "png"
         }),
         {
@@ -162,7 +162,7 @@ async function generateImages(difficulty, levelName) {
     const inpaintData = new FormData();
     inpaintData.append('image', fs.createReadStream(basePath));
     inpaintData.append('mask', fs.createReadStream(maskPath));
-    inpaintData.append('prompt', "different objects, changed colors, strange things, items missing, surreal details");
+    inpaintData.append('prompt', "a small detail changed, color swap, missing small object, different facial expression, simple modification, clean 2D style");
     inpaintData.append('output_format', 'png');
 
     const inpaintRes = await axios.post(
