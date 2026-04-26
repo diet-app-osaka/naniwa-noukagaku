@@ -92,34 +92,45 @@ async function uploadToDrive(filePath, filename) {
 
 function getRandomRegions(imgWidth, imgHeight, count, difficulty) {
     const regions = [];
-    let sizeRatio;
-    if (difficulty === 1) sizeRatio = 0.06; // さらに小さくして精度アップ
-    else if (difficulty === 2) sizeRatio = 0.04; 
-    else sizeRatio = 0.025; 
-
+    let sizeRatio = difficulty === 1 ? 0.08 : (difficulty === 2 ? 0.06 : 0.04);
     const baseSize = Math.floor(Math.min(imgWidth, imgHeight) * sizeRatio);
-    let attempts = 0;
     
-    while (regions.length < count && attempts < 1000) {
-        attempts++;
+    // 画像を4x4のグリッド（16マス）に分割して、間違い箇所を散らす
+    const cols = 4;
+    const rows = 4;
+    const cellW = imgWidth / cols;
+    const cellH = imgHeight / rows;
+    
+    const cells = [];
+    for(let r=0; r<rows; r++) {
+        for(let c=0; c<cols; c++) {
+            cells.push({r, c});
+        }
+    }
+    
+    // セルをランダムにシャッフル
+    for(let i = cells.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [cells[i], cells[j]] = [cells[j], cells[i]];
+    }
+    
+    for(let i=0; i<count && i<cells.length; i++) {
+        const cell = cells[i];
         const w = Math.floor(baseSize * (0.8 + Math.random() * 0.4));
         const h = Math.floor(baseSize * (0.8 + Math.random() * 0.4));
-        const margin = Math.floor(baseSize * 0.5);
-        const x = Math.floor(margin + Math.random() * (imgWidth - w - margin * 2));
-        const y = Math.floor(margin + Math.random() * (imgHeight - h - margin * 2));
-
-        let overlap = false;
-        for (const r of regions) {
-            const padding = baseSize * 1.5;
-            if (x - padding < r[0] + r[2] && x + w + padding > r[0] && 
-                y - padding < r[1] + r[3] && y + h + padding > r[1]) {
-                overlap = true;
-                break;
-            }
-        }
-        if (!overlap) {
-            regions.push([x, y, w, h]);
-        }
+        
+        const maxX = cellW - w;
+        const maxY = cellH - h;
+        const xOffset = maxX > 0 ? Math.random() * maxX : 0;
+        const yOffset = maxY > 0 ? Math.random() * maxY : 0;
+        
+        const x = Math.floor(cell.c * cellW + xOffset);
+        const y = Math.floor(cell.r * cellH + yOffset);
+        
+        const safeX = Math.max(0, Math.min(x, imgWidth - w));
+        const safeY = Math.max(0, Math.min(y, imgHeight - h));
+        
+        regions.push([safeX, safeY, w, h]);
     }
     return regions;
 }
@@ -223,24 +234,25 @@ async function generateImages(difficulty, levelName) {
 
     const validRegions = [];
     for(const [rx, ry, rw, rh] of regions) {
-        let diffSum = 0;
+        let significantlyChangedPixels = 0;
         for(let x = rx; x < rx + rw; x++) {
             for(let y = ry; y < ry + rh; y++) {
                 if (x >= width || y >= height) continue;
                 const c1 = Jimp.intToRGBA(baseImg.getPixelColor(x, y));
                 const c2 = Jimp.intToRGBA(mistakeImg.getPixelColor(x, y));
-                diffSum += Math.abs(c1.r - c2.r) + Math.abs(c1.g - c2.g) + Math.abs(c1.b - c2.b);
+                const diff = Math.abs(c1.r - c2.r) + Math.abs(c1.g - c2.g) + Math.abs(c1.b - c2.b);
+                if (diff > 50) {
+                    significantlyChangedPixels++;
+                }
             }
         }
-        const avgDiff = diffSum / (rw * rh * 3);
-        console.log(`      -> 領域(${rx},${ry}) の変化量: ${avgDiff.toFixed(2)}`);
         
-        // 閾値（15）未満の場合は、変化が小さすぎるとみなして弾く
-        if (avgDiff > 15) {
+        // 領域内の2%以上のピクセルが大きく変化していれば採用
+        if (significantlyChangedPixels > (rw * rh * 0.02)) {
             validRegions.push([rx, ry, rw, rh]);
+            console.log(`      -> 領域(${rx},${ry}) は採用されました。`);
         } else {
-            console.log(`      -> [除外] 変化が小さいため、元の画像を貼り直して完全に同一にします。`);
-            mistakeImg.blit(baseImg, rx, ry, rx, ry, rw, rh);
+            console.log(`      -> [除外] 変化が小さいため不採用。`);
         }
     }
 
@@ -249,8 +261,44 @@ async function generateImages(difficulty, levelName) {
         return;
     }
 
+    // ★完璧な間違い画像を生成する（有効な領域だけを元の画像に合成する）
+    const finalMistakeImg = baseImg.clone();
+    const validMask = new Jimp(width, height, 0x000000FF);
+    const colorWhite = Jimp.rgbaToInt(255, 255, 255, 255);
+    for(const [rx, ry, rw, rh] of validRegions) {
+        const cx = rx + rw / 2;
+        const cy = ry + rh / 2;
+        const radius = Math.max(rw, rh) / 2;
+        for(let x = Math.floor(cx - radius * 1.2); x <= Math.ceil(cx + radius * 1.2); x++) {
+            for(let y = Math.floor(cy - radius * 1.2); y <= Math.ceil(cy + radius * 1.2); y++) {
+                const dist = Math.sqrt((x-cx)*(x-cx) + (y-cy)*(y-cy));
+                if(dist <= radius) {
+                    if(x >= 0 && x < width && y >= 0 && y < height) {
+                        validMask.setPixelColor(colorWhite, x, y);
+                    }
+                }
+            }
+        }
+    }
+    validMask.blur(10); // なじませるためのぼかし
+    
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const maskVal = Jimp.intToRGBA(validMask.getPixelColor(x, y)).r;
+            if (maskVal > 0) {
+                const baseC = Jimp.intToRGBA(baseImg.getPixelColor(x, y));
+                const mistC = Jimp.intToRGBA(mistakeImg.getPixelColor(x, y));
+                const alpha = maskVal / 255;
+                const r = Math.round(baseC.r * (1 - alpha) + mistC.r * alpha);
+                const g = Math.round(baseC.g * (1 - alpha) + mistC.g * alpha);
+                const b = Math.round(baseC.b * (1 - alpha) + mistC.b * alpha);
+                finalMistakeImg.setPixelColor(Jimp.rgbaToInt(r, g, b, 255), x, y);
+            }
+        }
+    }
+
     // クリーンになった間違い画像を保存＆アップロード
-    await mistakeImg.writeAsync(mistakePath);
+    await finalMistakeImg.writeAsync(mistakePath);
     await uploadToDrive(mistakePath, `${levelLabel}_${timestamp}_mistake.png`);
 
     // 答え合わせ画像には、弾かれなかった「明確な間違い」のみ赤丸をつける
